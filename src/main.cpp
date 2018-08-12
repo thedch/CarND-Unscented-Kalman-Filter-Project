@@ -105,10 +105,9 @@ int main()
       	  ground_truth.push_back(gt_values);
 
           // Call ProcessMeasurment(meas_package) for Kalman filter
-      	  ukf.ProcessMeasurement(meas_package);
+          ukf.ProcessMeasurement(meas_package);
 
-      	  // Push the current estimated x,y positon from the Kalman filter's state vector
-
+      	  // Push the current estimated x,y position from the Kalman filter's state vector
       	  VectorXd estimate(4);
 
       	  double p_x = ukf.x_(0);
@@ -165,7 +164,7 @@ int main()
   });
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
-    std::cout << "Connected!!!" << std::endl;
+    std::cout << "Connected" << std::endl;
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {
