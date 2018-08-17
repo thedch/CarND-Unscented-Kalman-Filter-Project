@@ -12,6 +12,11 @@ double normalize_angle(double angle);
 
 UKF::UKF() {
   is_initialized_ = false;
+  n_x_ = 5;
+  n_aug_ = 7;
+  lambda_ = 3 - n_aug_;
+  use_laser_ = true; // helper bools for testing sensors in isolation
+  use_radar_ = true;
 
   // initial state vector
   x_ = VectorXd(5);
@@ -20,10 +25,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 0.2; // TODO: WRONG
+  std_a_ = 2;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 0.2; // TODO: WRONG
+  std_yawdd_ = 0.5;
 
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -52,18 +57,16 @@ UKF::UKF() {
               0, 0.0225;
 
   P_ = MatrixXd(5, 5); // Initialize the state covariance matrix
-  P_ << 1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1,
-        1, 1, 1, 1, 1;
-        // 0,   0.1, 0,   0,   0,
-        // 0,   0,   0.1, 0,   0,
-        // 0,   0,   0,   0.1, 0,
-        // 0,   0,   0,   0,   0.1;
-
+  P_ << 1, 0, 0, 0, 0,
+        0, 1, 0, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 1, 0,
+        0, 0, 0, 0, 1;
 
   previous_t = 0;
+
+  x_ = VectorXd(5);
+  x_ << 0, 0, 0, 0, 0;
 }
 
 UKF::~UKF() {}
@@ -75,22 +78,14 @@ UKF::~UKF() {}
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   cout << "Entering ProcessMeasurement" << endl;
   if (is_initialized_ == false) {
-    cout << "Init..." << endl;
-    x_ = VectorXd(5);
-    x_ << 0, 0, 0, 0, 0;
-
-    n_x_ = 5;
-    n_aug_ = 7;
-    lambda_ = 3 - n_x_;
-
-    if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-      int rho = meas_package.raw_measurements_(0);
-      int theta = meas_package.raw_measurements_(1);
+    if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
+      x_(0) = meas_package.raw_measurements_(0); // LIDAR is given as x/y coord,
+      x_(1) = meas_package.raw_measurements_(1); // no need to transform using trig
+    } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
+      double rho = meas_package.raw_measurements_(0);
+      double theta = meas_package.raw_measurements_(1);
       x_(0) = rho * cos(theta);
       x_(1) = rho * sin(theta);
-    } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-      x_(0) = meas_package.raw_measurements_(0);
-      x_(1) = meas_package.raw_measurements_(1);
     }
 
     previous_t = meas_package.timestamp_;
@@ -101,14 +96,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   double delta_t = (meas_package.timestamp_ - previous_t) / 1000000.0;
   previous_t = meas_package.timestamp_;
   Prediction(delta_t);
-  cout << "Finished Prediction" << endl;
 
   if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-    // UpdateLidar(meas_package);
+    UpdateLidar(meas_package);
   } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
     UpdateRadar(meas_package);
   }
-  cout << "Leaving ProcessMeasurement" << endl;
 }
 
 /**

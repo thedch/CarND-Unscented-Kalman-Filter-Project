@@ -7,7 +7,7 @@
 #include <string>
 #include <fstream>
 
-using Eigen::MatrixXd; // TODO: namespace injection in .h files is bad practice
+using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
 class UKF {
@@ -67,6 +67,8 @@ public:
   MatrixXd H_laser_;
   MatrixXd R_laser_;
 
+  bool use_laser_;
+  bool use_radar_;
 
   /**
    * Constructor
