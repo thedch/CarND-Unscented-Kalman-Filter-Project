@@ -240,7 +240,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   */
 
  if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-   cout << "WRONG SENSOR TYPE IN UPDATE LIDAR!" << endl;
+   cout << "WRONG SENSOR TYPE IN UPDATE LIDAR" << endl;
  }
 
   VectorXd z = meas_package.raw_measurements_;
@@ -275,7 +275,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   */
 
   if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-    cout << "WRONG SENSOR TYPE IN UPDATE RADAR!" << endl;
+    cout << "WRONG SENSOR TYPE IN UPDATE RADAR" << endl;
    }
 
   // 7.27
@@ -353,15 +353,10 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   z_diff(1) = normalize_angle(z_diff(1));
 
   // update state mean and covariance matrix
-  return;
+  // return;
   x_ = x_ + K * z_diff;
   P_ = P_ - K * S * K.transpose();
-  cout << "001" << endl;
-
 }
-
-
-// void UKF::GenerateSigmaPoints(MatrixXd* Xsig_out) { }
 
 
 double normalize_angle(double angle) {
