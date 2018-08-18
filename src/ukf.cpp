@@ -5,7 +5,6 @@
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
-using std::vector;
 
 
 double normalize_angle(double angle);
@@ -15,13 +14,11 @@ UKF::UKF() {
   n_x_ = 5;
   n_aug_ = 7;
   lambda_ = 3 - n_aug_;
-  use_laser_ = true; // helper bools for testing sensors in isolation
-  use_radar_ = true;
 
-  // initial state vector
+  // state vector
   x_ = VectorXd(5);
 
-  // initial covariance matrix
+  // covariance matrix
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
@@ -77,14 +74,14 @@ UKF::~UKF() {}
  */
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   if (is_initialized_ == false) {
-    if (meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
-      x_(0) = meas_package.raw_measurements_(0); // LIDAR is given as x/y coord,
-      x_(1) = meas_package.raw_measurements_(1); // no need to transform using trig
-    } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
+    if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
       double rho = meas_package.raw_measurements_(0);
       double theta = meas_package.raw_measurements_(1);
       x_(0) = rho * cos(theta);
       x_(1) = rho * sin(theta);
+    } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+      x_(0) = meas_package.raw_measurements_(0);
+      x_(1) = meas_package.raw_measurements_(1);
     }
 
     previous_t = meas_package.timestamp_;
@@ -92,10 +89,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     return;
   }
 
+  // Prediction Step
   double delta_t = (meas_package.timestamp_ - previous_t) / 1000000.0;
   previous_t = meas_package.timestamp_;
   Prediction(delta_t);
 
+  // Update Step
   if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
     UpdateLidar(meas_package);
   } else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
@@ -109,15 +108,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
  * measurement and this one.
  */
 void UKF::Prediction(double delta_t) {
-  /**
-  TODO:
-
-  Complete this function! Estimate the object's location. Modify the state
-  vector, x_. Predict sigma points, the state, and the state covariance matrix.
-  */
-
   // TODO: See 7.18 for sigma point creation
   // create augmented mean vector
+  double delta_t_2 = pow(delta_t, 2);
   VectorXd x_aug = VectorXd(7);
 
   cout << "x_ size:" << x_.size() << endl << x_ << endl;
@@ -165,25 +158,21 @@ void UKF::Prediction(double delta_t) {
 
     // avoid division by zero
     if (fabs(yawd) > 0.001) {
-        px_p = p_x + v/yawd * (sin(yaw + yawd*delta_t) - sin(yaw));
-        py_p = p_y + v/yawd * (cos(yaw) - cos(yaw+yawd*delta_t) );
+        px_p = p_x + v/yawd * (sin(yaw + yawd * delta_t) - sin(yaw));
+        py_p = p_y + v/yawd * (cos(yaw) - cos(yaw + yawd * delta_t) );
     } else {
         px_p = p_x + v * delta_t * cos(yaw);
         py_p = p_y + v * delta_t * sin(yaw);
     }
 
     // The last three state variables are unchanged if yawd is zero
-    double v_p = v;
-    double yaw_p = yaw + yawd*delta_t;
-    double yawd_p = yawd;
+    double v_p = v + nu_a * delta_t;
+    double yaw_p = yaw + yawd * delta_t + 0.5 * nu_yawdd * delta_t_2;
+    double yawd_p = yawd + nu_yawdd * delta_t;
 
     // add noise
-    px_p = px_p + 0.5*nu_a*delta_t*delta_t * cos(yaw);
-    py_p = py_p + 0.5*nu_a*delta_t*delta_t * sin(yaw);
-    v_p = v_p + nu_a*delta_t;
-
-    yaw_p = yaw_p + 0.5*nu_yawdd*delta_t*delta_t;
-    yawd_p = yawd_p + nu_yawdd*delta_t;
+    px_p += 0.5 * nu_a * delta_t_2 * cos(yaw);
+    py_p += 0.5 * nu_a * delta_t_2 * sin(yaw);
 
     // write predicted sigma point into each column
     Xsig_pred_(0,i) = px_p;
@@ -230,34 +219,18 @@ void UKF::Prediction(double delta_t) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
-  /**
-  TODO:
-
-  Complete this function! Use lidar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the lidar NIS.
-  */
-
- if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-   cout << "WRONG SENSOR TYPE IN UPDATE LIDAR" << endl;
- }
-
   VectorXd z = meas_package.raw_measurements_;
-  VectorXd y = z - H_laser_ * x_; // 2x1 = 2x1 - 2x5 * 5x1
-  MatrixXd Ht = H_laser_.transpose(); // 4x2 = 2x4.T
-  MatrixXd S = H_laser_ * P_ * Ht + R_laser_; // 2x2 = 2x4 * 4x4 * 4x2 + 2x2
-  MatrixXd Si = S.inverse(); // 2x2 = 2x2.inv()
-  MatrixXd PHt = P_ * Ht; // 4x2 = 4x4 * 4x2
-  MatrixXd K = PHt * Si; // 4x2 = 4x2 * 2x2
+  VectorXd y = z - H_laser_ * x_;
+  MatrixXd Ht = H_laser_.transpose();
+  MatrixXd S = H_laser_ * P_ * Ht + R_laser_;
+  MatrixXd Si = S.inverse();
+  MatrixXd PHt = P_ * Ht;
+  MatrixXd K = PHt * Si;
 
-  x_ = x_ + (K * y); // 4x1 = 4x1 + (4x2 * 2x1)
-  long x_size = x_.size(); // 4
-  MatrixXd I = MatrixXd::Identity(x_size, x_size); // 4x4
-  P_ = (I - K * H_laser_) * P_; // 4x4 = (4x4 - 4x2 * 2x4) * 4x4
-
-  // TODO: Calculate LIDAR RIS
-
+  x_ = x_ + (K * y);
+  long x_size = x_.size();
+  MatrixXd I = MatrixXd::Identity(x_size, x_size);
+  P_ = (I - K * H_laser_) * P_;
 }
 
 /**
@@ -265,19 +238,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
-  /**
-  TODO:
-
-  Complete this function! Use radar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the radar NIS.
-  */
-
-  if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-    cout << "WRONG SENSOR TYPE IN UPDATE RADAR" << endl;
-   }
-
   // 7.27
   // Transform sigma pts into measurement space (need to copy sigma pt generation code?)
 
