@@ -70,14 +70,8 @@ public:
   bool use_laser_;
   bool use_radar_;
 
-  /**
-   * Constructor
-   */
   UKF();
 
-  /**
-   * Destructor
-   */
   virtual ~UKF();
 
   /**
